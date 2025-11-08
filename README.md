@@ -17,10 +17,6 @@
 ![Conexiones](screenshots/Conexiones.png)
 *Administra múltiples conexiones VPN con contraseñas guardadas y certificados*
 
-### Panel de Control
-![Panel Lateral](screenshots/PanelIzquierdo.png)
-*Estadísticas en tiempo real y estado de la conexión con animación live*
-
 ### Monitoreo de Tráfico
 ![Tráfico](screenshots/Trafico.png)
 *Gráficos detallados de tráfico RX/TX con histórico suavizado*
