@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onVPNLog: (callback) => ipcRenderer.on('vpn-log', (event, data) => callback(data)),
     onVPNIP: (callback) => ipcRenderer.on('vpn-ip', (event, data) => callback(data)),
     onTrafficUpdate: (callback) => ipcRenderer.on('traffic-update', (event, data) => callback(data)),
+    onVPNError: (callback) => ipcRenderer.on('vpn-error', (event, data) => callback(data)),
 });

@@ -367,7 +367,7 @@ function stopTrafficMonitoring() {
     lastTxBytes = 0;
 }
 
-function connectVPN(server, port, username, password, trustedCert, connectionName) {
+function connectVPN(server, port, username, password, trustedCert, connectionName, autoTrustCert) {
     return new Promise((resolve, reject) => {
         if (vpnProcess) {
             logger.error('Ya hay una conexión activa');
@@ -381,7 +381,9 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
             '-u', username
         ];
 
-        if (trustedCert) {
+        if (autoTrustCert !== false) {
+            args.push('--no-cert-check');
+        } else if (trustedCert) {
             args.push('--trusted-cert', trustedCert);
         }
 
@@ -487,6 +489,10 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
         });
 
         vpnProcess.on('close', (code) => {
+            if (errorTimeout) {
+                clearTimeout(errorTimeout);
+            }
+            
             const duration = connectionStartTime ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
             
             logger.info('VPN disconnected', code ? `(code: ${code})` : '');
@@ -515,6 +521,7 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
             logger.error('VPN process error:', error.message);
             vpnError = true;
             isConnected = false;
+            vpnProcess = null;
             updateTrayMenu();
             addToHistory({
                 connectionName,
@@ -525,6 +532,40 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
             });
             reject(error.message);
         });
+
+        let errorDetected = false;
+        let errorTimeout = setTimeout(() => {
+            if (!isConnected && outputBuffer.includes('ERROR')) {
+                errorDetected = true;
+                logger.error('Connection failed - certificate or authentication error');
+                if (vpnProcess) {
+                    try {
+                        vpnProcess.kill();
+                    } catch (e) {
+                        logger.debug('Error killing process:', e.message);
+                    }
+                }
+                vpnProcess = null;
+                isConnected = false;
+                vpnError = true;
+                updateTrayMenu();
+                addToHistory({
+                    connectionName,
+                    server: `${server}:${port}`,
+                    username,
+                    success: false,
+                    error: 'Certificate validation failed or authentication error'
+                });
+                
+                try {
+                    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+                        mainWindow.webContents.send('vpn-error', 'Error de certificado o autenticación. Verifica tus credenciales.');
+                    }
+                } catch (error) {
+                    logger.debug('Failed to send error notification:', error.message);
+                }
+            }
+        }, 10000);
 
         resolve('Conectando...');
     });
@@ -574,7 +615,8 @@ ipcMain.handle('connect-vpn', async (event, params) => {
             params.username,
             params.password,
             params.trustedCert,
-            params.connectionName
+            params.connectionName,
+            params.autoTrustCert
         );
         return { success: true, message: result };
     } catch (error) {

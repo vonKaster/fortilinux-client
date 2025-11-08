@@ -5,6 +5,7 @@ export interface Connection {
   username: string;
   password?: string;
   trustedCert?: string;
+  autoTrustCert?: boolean;
 }
 
 export interface Config {
@@ -55,6 +56,7 @@ declare global {
       onVPNLog: (callback: (data: string) => void) => void;
       onVPNIP: (callback: (data: string) => void) => void;
       onTrafficUpdate: (callback: (data: TrafficData) => void) => void;
+      onVPNError: (callback: (data: string) => void) => void;
     };
   }
 }

@@ -21,12 +21,16 @@ export function ConnectionDialog({ open, onOpenChange, connection, onSave }: Con
     username: '',
     password: '',
     trustedCert: '',
+    autoTrustCert: true,
   });
   const [savePassword, setSavePassword] = useState(false);
 
   useEffect(() => {
     if (connection) {
-      setFormData(connection);
+      setFormData({
+        ...connection,
+        autoTrustCert: connection.autoTrustCert !== undefined ? connection.autoTrustCert : true,
+      });
       setSavePassword(!!connection.password);
     } else {
       setFormData({
@@ -36,6 +40,7 @@ export function ConnectionDialog({ open, onOpenChange, connection, onSave }: Con
         username: '',
         password: '',
         trustedCert: '',
+        autoTrustCert: true,
       });
       setSavePassword(false);
     }
@@ -112,13 +117,21 @@ export function ConnectionDialog({ open, onOpenChange, connection, onSave }: Con
             <Switch id="save-pwd" checked={savePassword} onCheckedChange={setSavePassword} />
             <Label htmlFor="save-pwd">Guardar contraseña</Label>
           </div>
+          <div className="flex items-center space-x-2">
+            <Switch 
+              id="auto-trust" 
+              checked={formData.autoTrustCert !== false} 
+              onCheckedChange={(checked) => setFormData({ ...formData, autoTrustCert: checked })} 
+            />
+            <Label htmlFor="auto-trust">Auto-confiar en certificados</Label>
+          </div>
           <div className="grid gap-2">
-            <Label htmlFor="cert">Certificado (opcional)</Label>
+            <Label htmlFor="cert">Certificado específico (opcional)</Label>
             <Input
               id="cert"
               value={formData.trustedCert}
               onChange={(e) => setFormData({ ...formData, trustedCert: e.target.value })}
-              placeholder="Fingerprint del certificado"
+              placeholder="SHA256 fingerprint del certificado"
             />
           </div>
         </div>

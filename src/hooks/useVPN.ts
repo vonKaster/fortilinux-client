@@ -31,6 +31,10 @@ export function useVPN() {
       setTraffic(data);
     });
 
+    window.electronAPI.onVPNError((error) => {
+      window.dispatchEvent(new CustomEvent('vpn-error', { detail: error }));
+    });
+
     // Poll status
     const interval = setInterval(async () => {
       const vpnStatus = await window.electronAPI.getVPNStatus();

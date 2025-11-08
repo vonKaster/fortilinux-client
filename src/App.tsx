@@ -43,8 +43,19 @@ function App() {
       }, 1000);
     };
 
+    const handleVPNError = (event: any) => {
+      setIsConnecting(false);
+      toast.error('Error de conexión', {
+        description: event.detail || 'No se pudo establecer la conexión VPN',
+      });
+    };
+
     window.addEventListener('vpn-connected', handleVPNConnected);
-    return () => window.removeEventListener('vpn-connected', handleVPNConnected);
+    window.addEventListener('vpn-error', handleVPNError);
+    return () => {
+      window.removeEventListener('vpn-connected', handleVPNConnected);
+      window.removeEventListener('vpn-error', handleVPNError);
+    };
   }, []);
 
   const handleConnect = async (connection: Connection) => {
