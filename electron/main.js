@@ -375,16 +375,37 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
             return;
         }
 
+        const configPath = path.join(configDir, `openfortivpn-${server.replace(/\./g, '-')}.conf`);
+        let configContent = `host = ${server}\nport = ${port}\nusername = ${username}\nset-dns = 0\nset-routes = 1\n`;
+        
+        if (trustedCert) {
+            configContent += `trusted-cert = ${trustedCert}\n`;
+        } else if (fs.existsSync(configPath)) {
+            try {
+                const existingConfig = fs.readFileSync(configPath, 'utf8');
+                const certMatch = existingConfig.match(/trusted-cert\s*=\s*([a-f0-9]{64})/i);
+                if (certMatch) {
+                    configContent += `trusted-cert = ${certMatch[1]}\n`;
+                    logger.info('Using existing trusted certificate');
+                }
+            } catch (error) {
+                logger.error('Failed to read existing config:', error.message);
+            }
+        }
+        
+        try {
+            fs.writeFileSync(configPath, configContent);
+        } catch (error) {
+            logger.error('Failed to create config file:', error.message);
+        }
+
         const args = [
             'openfortivpn',
-            `${server}:${port}`,
-            '-u', username
+            '-c', configPath
         ];
 
-        if (autoTrustCert !== false) {
-            args.push('--no-cert-check');
-        } else if (trustedCert) {
-            args.push('--trusted-cert', trustedCert);
+        if (autoTrustCert !== false && !trustedCert && !configContent.includes('trusted-cert')) {
+            args.push('--insecure-ssl');
         }
 
         const useSudo = fs.existsSync('/etc/sudoers.d/fortilinux-vpn');
@@ -409,6 +430,8 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
         }
 
         let outputBuffer = '';
+        let errorBuffer = '';
+        let hasError = false;
         
         vpnProcess.stdout.on('data', (data) => {
             const output = data.toString();
@@ -420,6 +443,13 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
                 }
             } catch (error) {
                 logger.debug('Failed to send log update:', error.message);
+            }
+            
+            if (output.includes('Gateway certificate validation failed')) {
+                if (!isConnected) {
+                    hasError = true;
+                    logger.error('Certificate validation failed detected in stdout');
+                }
             }
             
             const ipMatch = output.match(/local\s+IP\s+address\s+([\d.]+)/i);
@@ -437,6 +467,10 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
             }
             
             if (output.includes('Tunnel is up and running')) {
+                if (errorTimeout) {
+                    clearTimeout(errorTimeout);
+                    errorTimeout = null;
+                }
                 isConnected = true;
                 logger.info('VPN connected successfully');
                 updateTrayMenu();
@@ -465,12 +499,40 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
 
         vpnProcess.stderr.on('data', (data) => {
             const output = data.toString();
+            errorBuffer += output;
+            
             try {
                 if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
                     mainWindow.webContents.send('vpn-log', output);
                 }
             } catch (error) {
                 logger.debug('Failed to send log update:', error.message);
+            }
+            
+            if (output.includes('Gateway certificate validation failed')) {
+                if (!isConnected) {
+                    hasError = true;
+                    logger.error('Certificate validation failed detected in stderr');
+                }
+            }
+            
+            if (output.includes('unrecognized option') || 
+                output.includes('Usage:') ||
+                output.includes('FATAL:') ||
+                output.includes('authentication failed') ||
+                output.includes('Could not authenticate')) {
+                hasError = true;
+                
+                setTimeout(() => {
+                    if (vpnProcess && !isConnected) {
+                        logger.error('Connection error detected, terminating process...');
+                        try {
+                            vpnProcess.kill();
+                        } catch (e) {
+                            logger.debug('Error killing process:', e.message);
+                        }
+                    }
+                }, 1000);
             }
             
             const ipMatch = output.match(/local\s+IP\s+address\s+([\d.]+)/i);
@@ -491,18 +553,93 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
         vpnProcess.on('close', (code) => {
             if (errorTimeout) {
                 clearTimeout(errorTimeout);
+                errorTimeout = null;
             }
             
             const duration = connectionStartTime ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
+            const wasConnected = isConnected;
             
-            logger.info('VPN disconnected', code ? `(code: ${code})` : '');
+            logger.info('VPN process closed', code ? `(code: ${code})` : '');
+            
             stopTrafficMonitoring();
             vpnProcess = null;
             isConnected = false;
-            vpnError = false;
             connectionStartTime = null;
             assignedIP = null;
             trafficHistory = [];
+            
+            if (hasError && !wasConnected) {
+                vpnError = true;
+                let errorMessage = 'Error al conectar a la VPN';
+                let shouldRetry = false;
+                
+                if (errorBuffer.includes('unrecognized option')) {
+                    errorMessage = 'Error: Opción no reconocida por openfortivpn. Verifica la configuración.';
+                } else if (errorBuffer.includes('authentication failed') || errorBuffer.includes('Could not authenticate')) {
+                    errorMessage = 'Error de autenticación. Verifica tus credenciales.';
+                } else if (errorBuffer.includes('Gateway certificate validation failed') || outputBuffer.includes('Gateway certificate validation failed')) {
+                    const combinedBuffer = errorBuffer + outputBuffer;
+                    const certMatch = combinedBuffer.match(/--trusted-cert\s+([a-f0-9]{64})/i);
+                    
+                    if (certMatch && autoTrustCert !== false) {
+                        const certDigest = certMatch[1];
+                        const configPath = path.join(configDir, `openfortivpn-${server.replace(/\./g, '-')}.conf`);
+                        
+                        try {
+                            let configContent = fs.readFileSync(configPath, 'utf8');
+                            
+                            if (!configContent.includes('trusted-cert')) {
+                                configContent += `trusted-cert = ${certDigest}\n`;
+                                fs.writeFileSync(configPath, configContent);
+                                logger.info('Certificate added to config:', certDigest);
+                                
+                                try {
+                                    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+                                        mainWindow.webContents.send('vpn-log', `\n[INFO] Certificate trusted automatically: ${certDigest}\n[INFO] Reconnecting...\n\n`);
+                                    }
+                                } catch (e) {}
+                                
+                                shouldRetry = true;
+                                errorMessage = 'Certificate added, reconnecting...';
+                                vpnError = false;
+                            }
+                        } catch (error) {
+                            logger.error('Failed to update config with cert:', error.message);
+                            errorMessage = 'Error de validación de certificado. Intenta habilitar "Auto-confiar en certificados".';
+                        }
+                    } else {
+                        errorMessage = 'Error de validación de certificado. Intenta habilitar "Auto-confiar en certificados".';
+                    }
+                } else if (outputBuffer.includes('ERROR') || errorBuffer.includes('ERROR')) {
+                    errorMessage = 'Error al conectar. Revisa los logs para más detalles.';
+                }
+                
+                if (!shouldRetry) {
+                    addToHistory({
+                        connectionName,
+                        server: `${server}:${port}`,
+                        username,
+                        success: false,
+                        error: errorMessage
+                    });
+                    
+                    try {
+                        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+                            mainWindow.webContents.send('vpn-error', errorMessage);
+                        }
+                    } catch (error) {
+                        logger.debug('Failed to send error notification:', error.message);
+                    }
+                } else {
+                    setTimeout(() => {
+                        logger.info('Retrying connection with trusted certificate...');
+                        connectVPN(server, port, username, password, null, connectionName, autoTrustCert);
+                    }, 2000);
+                }
+            } else {
+                vpnError = false;
+            }
+            
             updateTrayMenu();
             
             try {
@@ -533,39 +670,30 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
             reject(error.message);
         });
 
-        let errorDetected = false;
         let errorTimeout = setTimeout(() => {
-            if (!isConnected && outputBuffer.includes('ERROR')) {
-                errorDetected = true;
-                logger.error('Connection failed - certificate or authentication error');
-                if (vpnProcess) {
-                    try {
-                        vpnProcess.kill();
-                    } catch (e) {
-                        logger.debug('Error killing process:', e.message);
-                    }
-                }
-                vpnProcess = null;
-                isConnected = false;
-                vpnError = true;
-                updateTrayMenu();
-                addToHistory({
-                    connectionName,
-                    server: `${server}:${port}`,
-                    username,
-                    success: false,
-                    error: 'Certificate validation failed or authentication error'
-                });
+            if (!isConnected && vpnProcess) {
+                logger.error('Connection timeout - could not connect in 30 seconds');
+                hasError = true;
+                errorBuffer += 'ERROR: Connection timeout';
                 
                 try {
                     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
-                        mainWindow.webContents.send('vpn-error', 'Error de certificado o autenticación. Verifica tus credenciales.');
+                        mainWindow.webContents.send('vpn-error', 'Connection timeout: Could not connect in 30 seconds');
                     }
                 } catch (error) {
-                    logger.debug('Failed to send error notification:', error.message);
+                    logger.debug('Failed to send timeout notification:', error.message);
+                }
+                
+                try {
+                    const useSudo = fs.existsSync('/etc/sudoers.d/fortilinux-vpn');
+                    const command = useSudo ? 'sudo' : 'pkexec';
+                    spawn(command, ['kill', '-9', vpnProcess.pid.toString()]);
+                    vpnProcess = null;
+                } catch (e) {
+                    logger.debug('Error killing process:', e.message);
                 }
             }
-        }, 10000);
+        }, 30000);
 
         resolve('Conectando...');
     });
@@ -627,6 +755,23 @@ ipcMain.handle('connect-vpn', async (event, params) => {
 ipcMain.handle('disconnect-vpn', () => {
     const message = disconnectVPN();
     return { success: true, message };
+});
+ipcMain.handle('cancel-connection', () => {
+    if (vpnProcess) {
+        logger.info('Cancelling connection attempt...');
+        try {
+            const useSudo = fs.existsSync('/etc/sudoers.d/fortilinux-vpn');
+            const command = useSudo ? 'sudo' : 'pkexec';
+            spawn(command, ['kill', '-9', vpnProcess.pid.toString()]);
+            vpnProcess = null;
+            isConnected = false;
+            return { success: true, message: 'Connection cancelled' };
+        } catch (error) {
+            logger.error('Failed to cancel connection:', error.message);
+            return { success: false, message: 'Failed to cancel' };
+        }
+    }
+    return { success: false, message: 'No connection in progress' };
 });
 ipcMain.handle('get-vpn-status', () => {
     const duration = connectionStartTime ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;

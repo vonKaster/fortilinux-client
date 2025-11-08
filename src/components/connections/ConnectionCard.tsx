@@ -1,4 +1,4 @@
-import { Edit, Play, Trash2, Key, Server as ServerIcon, User, Shield, Loader2 } from 'lucide-react';
+import { Edit, Play, Trash2, Key, Server as ServerIcon, User, Shield, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { Connection } from '@/types';
@@ -8,6 +8,7 @@ interface ConnectionCardProps {
   isConnected: boolean;
   isConnecting: boolean;
   onConnect: () => void;
+  onCancel: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -17,6 +18,7 @@ export function ConnectionCard({
   isConnected,
   isConnecting,
   onConnect,
+  onCancel,
   onEdit,
   onDelete,
 }: ConnectionCardProps) {
@@ -74,30 +76,33 @@ export function ConnectionCard({
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-            <Button 
-              variant="outline"
-              size="sm" 
-              disabled={isConnected || isConnecting} 
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!isConnected && !isConnecting && onConnect) {
-                  onConnect();
-                }
-              }}
-              className="ml-2 font-medium"
-            >
-              {isConnecting ? (
-                <>
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                  Conectando
-                </>
-              ) : (
-                <>
-                  <Play className="mr-2 h-3.5 w-3.5" />
-                  Conectar
-                </>
-              )}
-            </Button>
+            {isConnecting ? (
+              <Button 
+                variant="outline"
+                size="sm" 
+                onClick={onCancel}
+                className="ml-2 font-medium bg-red-600 text-white border-red-600 hover:bg-red-700 hover:border-red-700"
+              >
+                <X className="mr-2 h-3.5 w-3.5" />
+                Cancelar
+              </Button>
+            ) : (
+              <Button 
+                variant="outline"
+                size="sm" 
+                disabled={isConnected} 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isConnected && !isConnecting && onConnect) {
+                    onConnect();
+                  }
+                }}
+                className="ml-2 font-medium"
+              >
+                <Play className="mr-2 h-3.5 w-3.5" />
+                Conectar
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>

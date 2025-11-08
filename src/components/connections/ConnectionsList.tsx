@@ -11,6 +11,7 @@ interface ConnectionsListProps {
   isConnected: boolean;
   isConnecting: boolean;
   onConnect: (connection: Connection) => void;
+  onCancel: () => void;
   onEdit: (index: number, connection: Connection) => void;
   onDelete: (index: number) => void;
   onAdd: (connection: Connection) => void;
@@ -21,6 +22,7 @@ export function ConnectionsList({
   isConnected,
   isConnecting,
   onConnect,
+  onCancel,
   onEdit,
   onDelete,
   onAdd,
@@ -81,6 +83,7 @@ export function ConnectionsList({
               isConnected={isConnected}
               isConnecting={isConnecting}
               onConnect={() => onConnect(conn)}
+              onCancel={onCancel}
               onEdit={() => handleEdit(index, conn)}
               onDelete={() => onDelete(index)}
             />

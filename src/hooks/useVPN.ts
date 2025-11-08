@@ -54,6 +54,10 @@ export function useVPN() {
     return await window.electronAPI.disconnectVPN();
   };
 
+  const cancel = async () => {
+    return await window.electronAPI.cancelConnection();
+  };
+
   const getStatus = async () => {
     return await window.electronAPI.getVPNStatus();
   };
@@ -64,6 +68,7 @@ export function useVPN() {
     traffic,
     connect,
     disconnect,
+    cancel,
     getStatus,
   };
 }

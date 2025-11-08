@@ -51,6 +51,7 @@ declare global {
       clearHistory: () => Promise<boolean>;
       connectVPN: (params: Connection & { connectionName: string }) => Promise<{ success: boolean; message: string }>;
       disconnectVPN: () => Promise<{ success: boolean; message: string }>;
+      cancelConnection: () => Promise<{ success: boolean; message: string }>;
       getVPNStatus: () => Promise<VPNStatus>;
       onVPNStatus: (callback: (data: VPNStatus) => void) => void;
       onVPNLog: (callback: (data: string) => void) => void;

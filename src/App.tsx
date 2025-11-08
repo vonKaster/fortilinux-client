@@ -18,7 +18,7 @@ import type { Connection } from '@/types';
 
 function App() {
   const { theme, toggleTheme } = useTheme();
-  const { status, logs, traffic, connect, disconnect } = useVPN();
+  const { status, logs, traffic, connect, disconnect, cancel } = useVPN();
   const { connections, addConnection, updateConnection, deleteConnection } = useConnections();
   const { history, clearHistory } = useHistory();
   const [isConnecting, setIsConnecting] = useState(false);
@@ -68,6 +68,20 @@ function App() {
     await performConnect(connection, connection.password);
   };
 
+  const handleCancel = async () => {
+    try {
+      const result = await cancel();
+      setIsConnecting(false);
+      if (result?.success) {
+        toast.info('Conexión cancelada', {
+          description: 'La conexión fue cancelada por el usuario',
+        });
+      }
+    } catch (error) {
+      setIsConnecting(false);
+    }
+  };
+
   const performConnect = async (connection: Connection, password: string) => {
     setIsConnecting(true);
     
@@ -84,6 +98,7 @@ function App() {
         password: password,
         trustedCert: connection.trustedCert,
         connectionName: connection.name,
+        autoTrustCert: connection.autoTrustCert,
       });
 
       if (!result || !result.success) {
@@ -195,6 +210,7 @@ function App() {
                   isConnected={status.connected}
                   isConnecting={isConnecting}
                   onConnect={handleConnect}
+                  onCancel={handleCancel}
                   onEdit={updateConnection}
                   onDelete={handleDelete}
                   onAdd={addConnection}

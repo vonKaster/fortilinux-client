@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clearHistory: () => ipcRenderer.invoke('clear-history'),
     connectVPN: (params) => ipcRenderer.invoke('connect-vpn', params),
     disconnectVPN: () => ipcRenderer.invoke('disconnect-vpn'),
+    cancelConnection: () => ipcRenderer.invoke('cancel-connection'),
     getVPNStatus: () => ipcRenderer.invoke('get-vpn-status'),
     onVPNStatus: (callback) => ipcRenderer.on('vpn-status', (event, data) => callback(data)),
     onVPNLog: (callback) => ipcRenderer.on('vpn-log', (event, data) => callback(data)),
