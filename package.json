@@ -75,7 +75,7 @@
         "deb"
       ],
       "category": "Network",
-      "icon": "icons/fortivpn-connected.svg",
+      "icon": "icons/fortivpn.png",
       "maintainer": "FortiLinux Client <fortilinux@example.com>",
       "desktop": {
         "Name": "FortiLinux Client",
