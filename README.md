@@ -176,8 +176,29 @@ npm run build && electron-builder --linux deb
 fortilinux-client/
 │
 ├── 📂 electron/
-│   ├── main.js              # Proceso principal (Node.js)
-│   └── preload.js           # Bridge seguro IPC
+│   ├── main.js              # Entry point (inicializa IPC + lifecycle)
+│   ├── preload.js           # Bridge seguro IPC
+│   │
+│   ├── 📂 app/
+│   │   └── lifecycle.js      # Ciclo de vida de Electron (single instance, eventos)
+│   ├── 📂 ipc/
+│   │   └── handlers.js       # Handlers IPC (get-config, connect-vpn, etc.)
+│   ├── 📂 config/
+│   │   ├── paths.js          # Paths (configDir, isDev, etc.)
+│   │   └── storage.js        # Persistencia (config.json / history.json)
+│   ├── 📂 utils/
+│   │   ├── logger.js         # Logger centralizado
+│   │   └── permissions.js    # sudo/pkexec helpers
+│   ├── 📂 window/
+│   │   └── manager.js        # Ventana principal (createWindow, sendToWindow)
+│   ├── 📂 tray/
+│   │   └── manager.js        # System tray (icono + menú)
+│   ├── 📂 vpn/
+│   │   ├── state.js          # Estado global VPN
+│   │   ├── config.js         # Generación de config openfortivpn + args
+│   │   └── connection.js     # Conectar / desconectar / cancelar
+│   └── 📂 traffic/
+│       └── monitor.js        # Monitoreo de tráfico (ppp0/tun0/vpn0)
 │
 ├── 📂 src/
 │   ├── 📂 components/
