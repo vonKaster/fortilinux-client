@@ -376,7 +376,7 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
         }
 
         const configPath = path.join(configDir, `openfortivpn-${server.replace(/\./g, '-')}.conf`);
-        let configContent = `host = ${server}\nport = ${port}\nusername = ${username}\nset-dns = 0\nset-routes = 1\n`;
+        let configContent = `host = ${server}\nport = ${port}\nusername = ${username}\nset-dns = 1\nset-routes = 1\npppd-use-peerdns = 1\n`;
         
         if (trustedCert) {
             configContent += `trusted-cert = ${trustedCert}\n`;
@@ -401,8 +401,19 @@ function connectVPN(server, port, username, password, trustedCert, connectionNam
 
         const args = [
             'openfortivpn',
-            '-c', configPath
+            '-c', configPath,
+            '--pppd-use-peerdns=1'
         ];
+
+        // Intentar usar systemd-resolved si está disponible
+        try {
+            if (fs.existsSync('/etc/systemd/resolved.conf') || fs.existsSync('/run/systemd/resolve/resolv.conf')) {
+                args.push('--pppd-plugin', 'systemd-resolved');
+                logger.info('Using systemd-resolved plugin for DNS');
+            }
+        } catch (error) {
+            logger.debug('Could not detect systemd-resolved:', error.message);
+        }
 
         if (autoTrustCert !== false && !trustedCert && !configContent.includes('trusted-cert')) {
             args.push('--insecure-ssl');
